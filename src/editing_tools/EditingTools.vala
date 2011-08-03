@@ -1904,7 +1904,6 @@ public class FacesTool : EditingTool {
             cancel_button.set_tooltip_text(_("Close the Faces tool without saving changes"));
             cancel_button.set_image_position(Gtk.PositionType.LEFT);
 
-            ok_button.set_tooltip_text(_("Save changes and close the Faces tool"));
             ok_button.set_image_position(Gtk.PositionType.LEFT);
 
             face_widgets_layout = new Gtk.Box(Gtk.Orientation.VERTICAL, CONTROL_SPACING);
@@ -1958,6 +1957,15 @@ public class FacesTool : EditingTool {
 
         public EditingPhase get_editing_phase() {
             return editing_phase;
+        }
+
+        public void ok_button_set_sensitive(bool sensitive) {
+            if (sensitive)
+                ok_button.set_tooltip_text(_("Save changes and close the Faces tool"));
+            else
+                ok_button.set_tooltip_text(_("No changes to save"));
+            
+            ok_button.set_sensitive(sensitive);
         }
 
         public void add_face(FaceShape face_shape) {
@@ -2032,6 +2040,7 @@ public class FacesTool : EditingTool {
 
     private Cairo.Surface image_surface = null;
     private Gee.HashMap<string, FaceShape> face_shapes;
+    private Gee.HashMap<string, string> original_face_locations;
     private FaceShape editing_face_shape = null;
     private FacesToolWindow faces_tool_window = null;
 
@@ -2044,6 +2053,7 @@ public class FacesTool : EditingTool {
 
     public override void activate(PhotoCanvas canvas) {
         face_shapes = new Gee.HashMap<string, FaceShape>();
+        original_face_locations = new Gee.HashMap<string, string>();
 
         bind_canvas_handlers(canvas);
 
@@ -2062,9 +2072,9 @@ public class FacesTool : EditingTool {
         if (face_locations != null)
             foreach (Gee.Map.Entry<FaceID?, FaceLocation> entry in face_locations.entries) {
                 FaceShape new_face_shape;
+                string serialized_geometry = entry.value.get_serialized_geometry();
                 try {
-                    new_face_shape =
-                        FaceShape.from_serialized(canvas, entry.value.get_serialized_geometry());
+                    new_face_shape = FaceShape.from_serialized(canvas, serialized_geometry);
                 } catch (FaceShapeError e) {
                     if (e is FaceShapeError.CANT_CREATE)
                         continue;
@@ -2073,10 +2083,14 @@ public class FacesTool : EditingTool {
                 }
                 Face? face = Face.global.fetch(entry.key);
                 assert(face != null);
-                new_face_shape.set_name(face.get_name());
+                string face_name = face.get_name();
+                new_face_shape.set_name(face_name);
 
                 add_face(new_face_shape);
+                original_face_locations.set(face_name, serialized_geometry);
             }
+
+        set_ok_button_sensitivity();
 
         bind_window_handlers();
 
@@ -2297,6 +2311,11 @@ public class FacesTool : EditingTool {
             editing_face_shape.hide();
             editing_face_shape.set_editable(false);
 
+            // This is to allow the user to edit a FaceShape's shape
+            // without pressing the Enter button.
+            if (face_shapes.values.contains(editing_face_shape))
+                set_ok_button_sensitivity();
+
             editing_face_shape = null;
         }
 
@@ -2390,6 +2409,8 @@ public class FacesTool : EditingTool {
             face_shape.hide();
             face_shape.set_editable(false);
 
+            set_ok_button_sensitivity();
+
             release_face_shape();
         }
     }
@@ -2417,6 +2438,42 @@ public class FacesTool : EditingTool {
                 break;
             }
         }
+        
+        set_ok_button_sensitivity();
+    }
+    
+    private void set_ok_button_sensitivity() {
+        if (original_face_locations.size != face_shapes.size) {
+            faces_tool_window.ok_button_set_sensitive(true);
+            
+            return;
+        }
+        
+        foreach (Gee.Map.Entry<string, string> face_location in original_face_locations.entries) {
+            bool found = false;
+            
+            foreach (Gee.Map.Entry<string, FaceShape> face_shape in face_shapes.entries) {
+                if (face_location.key == face_shape.key) {
+                    if (face_location.value == face_shape.value.serialize()) {
+                        found = true;
+                        
+                        break;
+                    } else {
+                        faces_tool_window.ok_button_set_sensitive(true);
+                        
+                        return;
+                    }
+                }
+            }
+            
+            if (!found) {
+                faces_tool_window.ok_button_set_sensitive(true);
+                
+                return;
+            }
+        }
+        
+        faces_tool_window.ok_button_set_sensitive(false);
     }
 }
 
