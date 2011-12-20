@@ -3304,7 +3304,7 @@ public class LibraryPhotoPage : EditingHostPage {
 
 #if ENABLE_FACES       
     private void on_faces_toggled() {
-        on_tool_button_toggled(faces_button, FacesTool.factory);
+        on_tool_button_toggled(faces_button, EditingTools.FacesTool.factory);
     }
     
     protected void toggle_faces() {
