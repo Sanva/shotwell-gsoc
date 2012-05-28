@@ -42,6 +42,7 @@ UNIT_USES := \
 	Tags \
 	Camera \
 	Searches \
+	Faces \
 	DataImports \
 	Folders
 
