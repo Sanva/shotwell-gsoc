@@ -2586,11 +2586,15 @@ public class LibraryPhotoPage : EditingHostPage {
         add_tags_context_menu.label = Resources.ADD_TAGS_CONTEXT_MENU;
         actions += add_tags_context_menu;
         
+#if ENABLE_FACES
+        
         Gtk.ActionEntry faces = { "Faces", Resources.CROP, TRANSLATABLE, "<Ctrl>F",
             TRANSLATABLE, toggle_faces };
         faces.label = Resources.FACES_MENU;
         faces.tooltip = Resources.FACES_TOOLTIP;
         actions += faces;
+
+#endif
 
         return actions;
     }
