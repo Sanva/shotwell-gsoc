@@ -1895,8 +1895,8 @@ public class FacesTool : EditingTool {
         private Gtk.Box response_layout = null;
         private Gtk.HSeparator buttons_text_separator = null;
         private Gtk.Label help_text = null;
-        private Gtk.VBox face_widgets_layout = null;
-        private Gtk.VBox layout = null;
+        private Gtk.Box face_widgets_layout = null;
+        private Gtk.Box layout = null;
 
         public FacesToolWindow(Gtk.Window container) {
             base(container);
