@@ -132,8 +132,8 @@ public abstract class FaceShape : Object {
         this.editable = editable;
     }
     
-    public bool key_press_event(Gdk.EventKey event) {
-        switch (Gdk.keyval_name(event.keyval)) {
+    public bool key_press_event(uint keyval) {
+        switch (Gdk.keyval_name(keyval)) {
             case "Escape":
                 delete_me_requested();
             break;
