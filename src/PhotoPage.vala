@@ -1590,11 +1590,11 @@ public abstract class EditingHostPage : SinglePhotoPage {
         // pixbuf to the gutters
         if (current_tool == null)
             return false;
-        
-        current_tool.on_left_released((int) event.x, (int) event.y);
 
         if (current_tool.get_tool_window() != null)
             current_tool.get_tool_window().present();
+        
+        current_tool.on_left_released((int) event.x, (int) event.y);
         
         return false;
     }

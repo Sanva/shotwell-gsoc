@@ -109,6 +109,7 @@ public abstract class FaceShape : Object {
         if (editable) {
             update_face_window_position();
             face_window.show();
+            face_window.present();
         }
     }
     
@@ -722,6 +723,11 @@ public class FaceRectangle : FaceShape {
             return;
         }
         
+        if (is_editable()) {
+            face_window.show();
+            face_window.present();
+        }
+        
         // nothing to do if released outside of the face box
         if (in_manipulation == BoxLocation.OUTSIDE)
             return;
@@ -732,9 +738,6 @@ public class FaceRectangle : FaceShape {
         last_grab_y = -1;
         
         update_cursor(x, y);
-        
-        if (is_editable())
-            face_window.present();
     }
     
     public override void on_resized_pixbuf(Dimensions old_dim, Gdk.Pixbuf scaled) {
