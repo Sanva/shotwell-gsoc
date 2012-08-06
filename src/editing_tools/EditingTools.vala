@@ -2349,6 +2349,7 @@ public class FacesTool : EditingTool {
         editing_face_shape = null;
 
         faces_tool_window.set_editing_phase(EditingPhase.NOT_EDITING);
+        faces_tool_window.present();
     }
 
     private void hide_visible_face() {
