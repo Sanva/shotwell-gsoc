@@ -2016,7 +2016,7 @@ public class FacesTool : EditingTool {
     }
 
     public class EditingFaceToolWindow : EditingToolWindow {
-        public signal bool key_pressed(uint keyval);
+        public signal bool key_pressed(Gdk.EventKey event);
 
         public Gtk.Entry entry;
 
@@ -2034,7 +2034,7 @@ public class FacesTool : EditingTool {
         }
 
         public override bool key_press_event(Gdk.EventKey event) {
-            return key_pressed(event.keyval) || base.key_press_event(event);
+            return key_pressed(event) || base.key_press_event(event);
         }
     }
 
