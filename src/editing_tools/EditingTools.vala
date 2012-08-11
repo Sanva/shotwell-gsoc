@@ -1794,6 +1794,7 @@ public errordomain FaceShapeError {
 
 public class FacesTool : EditingTool {
     protected const int CONTROL_SPACING = 8;
+    protected const int FACE_LABEL_MAX_CHARS = 15;
 
     private enum EditingPhase {
         CLICK_TO_EDIT,
@@ -1831,7 +1832,8 @@ public class FacesTool : EditingTool {
 
             label = new Gtk.Label(face_shape.get_name());
             label.set_alignment(0f, 0.5f);
-            label.modify_font(Pango.FontDescription.from_string("monospace"));
+            label.ellipsize = Pango.EllipsizeMode.END;
+            label.width_chars = FACE_LABEL_MAX_CHARS;
 
             add(label);
             add(edit_button);
