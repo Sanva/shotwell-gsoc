@@ -2303,9 +2303,9 @@ public class FlagUnflagCommand : MultipleDataSourceAtOnceCommand {
 public class RemoveFacesFromPhotosCommand : SimpleProxyableCommand {
     private Gee.Map<MediaSource, string> map_source_geometry = new Gee.HashMap<MediaSource, string>();
     
-    public RemoveFacesFromPhotosCommand(Face face, Gee.Collection<MediaSource> sources, int count) {
+    public RemoveFacesFromPhotosCommand(Face face, Gee.Collection<MediaSource> sources) {
         base (face,
-            Resources.remove_face_from_photos_label(face.get_name(), count),
+            Resources.remove_face_from_photos_label(face.get_name(), sources.size),
             face.get_name());
         
         foreach (MediaSource source in sources) {

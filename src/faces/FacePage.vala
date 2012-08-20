@@ -111,8 +111,7 @@ public class FacePage : CollectionPage {
     private void on_remove_face_from_photos() {
         if (get_view().get_selected_count() > 0) {
             get_command_manager().execute(new RemoveFacesFromPhotosCommand(face, 
-                (Gee.Collection<MediaSource>) get_view().get_selected_sources(), 
-                get_view().get_selected_count()));
+                (Gee.Collection<MediaSource>) get_view().get_selected_sources()));
         }
     }
 }
