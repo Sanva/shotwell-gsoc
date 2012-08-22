@@ -1824,7 +1824,6 @@ public class FacesTool : EditingTool {
         }
 
         public FaceWidget (FaceShape face_shape) {
-            homogeneous = true;
             spacing = CONTROL_SPACING;
 
             edit_button = new Gtk.Button.from_stock(Gtk.Stock.EDIT);
@@ -1835,9 +1834,9 @@ public class FacesTool : EditingTool {
             label.ellipsize = Pango.EllipsizeMode.END;
             label.width_chars = FACE_LABEL_MAX_CHARS;
 
-            add(label);
-            add(edit_button);
-            add(delete_button);
+            pack_start(label, true);
+            pack_start(edit_button, false);
+            pack_start(delete_button, false);
 
             this.face_shape = face_shape;
             face_shape.set_widget(this);
