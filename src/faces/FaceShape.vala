@@ -260,18 +260,13 @@ public class FaceRectangle : FaceShape {
     
     public override void update_face_window_position() {
         AppWindow appWindow = AppWindow.get_instance();
-        Gtk.Allocation page_alloc;
         Gtk.Allocation face_window_alloc;
         Gdk.Rectangle scaled_pixbuf_pos = canvas.get_scaled_pixbuf_position();
         int x = 0;
         int y = 0;
         
         if (canvas.get_container() == appWindow) {
-            appWindow.get_window().get_origin(out x, out y);
-            appWindow.get_current_page().get_allocation(out page_alloc);
-            
-            x += page_alloc.x;
-            y += page_alloc.y;
+            appWindow.get_current_page().get_window().get_origin(out x, out y);
         } else assert(canvas.get_container() is FullscreenWindow);
         
         face_window.get_allocation(out face_window_alloc);
