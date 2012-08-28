@@ -1801,7 +1801,9 @@ public class FacesTool : EditingTool {
         NOT_EDITING,
         CREATING_DRAGGING,
         CREATING_EDITING,
-        EDITING
+        EDITING,
+        DETECTING_FACES,
+        DETECTING_FACES_FINISHED
     }
 
     public class FaceWidget : Gtk.HBox {
@@ -1888,11 +1890,15 @@ public class FacesTool : EditingTool {
         public signal void face_hidden();
         public signal void face_edit_requested(string face_name);
         public signal void face_delete_requested(string face_name);
-
+        public signal void detection_canceled();
+        
+        public Gtk.Button detection_button = new Gtk.Button.with_label(_("Detect faces"));
         public Gtk.Button ok_button = new Gtk.Button.from_stock(Gtk.Stock.OK);
         public Gtk.Button cancel_button = new Gtk.Button.from_stock(Gtk.Stock.CANCEL);
-
+        public Gtk.Button cancel_detection_button = new Gtk.Button.from_stock(Gtk.Stock.CANCEL);
+        
         private EditingPhase editing_phase = EditingPhase.NOT_EDITING;
+        private Gtk.Box help_layout = null;
         private Gtk.Box response_layout = null;
         private Gtk.HSeparator buttons_text_separator = null;
         private Gtk.Label help_text = null;
@@ -1901,7 +1907,13 @@ public class FacesTool : EditingTool {
 
         public FacesToolWindow(Gtk.Window container) {
             base(container);
-
+            
+            detection_button.set_tooltip_text(_("Detect faces on this photo"));
+            
+            cancel_detection_button.set_tooltip_text(_("Cancel face detection"));
+            cancel_detection_button.set_image_position(Gtk.PositionType.LEFT);
+            cancel_detection_button.clicked.connect(on_cancel_detection);
+            
             cancel_button.set_tooltip_text(_("Close the Faces tool without saving changes"));
             cancel_button.set_image_position(Gtk.PositionType.LEFT);
 
@@ -1910,14 +1922,17 @@ public class FacesTool : EditingTool {
             face_widgets_layout = new Gtk.Box(Gtk.Orientation.VERTICAL, CONTROL_SPACING);
 
             help_text = new Gtk.Label(_("Click and drag to tag a face"));
-
+            help_layout = new Gtk.Box(Gtk.Orientation.HORIZONTAL, CONTROL_SPACING);
+            help_layout.pack_start(help_text, true);
+            
             response_layout = new Gtk.Box(Gtk.Orientation.HORIZONTAL, CONTROL_SPACING);
+            response_layout.add(detection_button);
             response_layout.add(cancel_button);
             response_layout.add(ok_button);
 
             layout = new Gtk.Box(Gtk.Orientation.VERTICAL, CONTROL_SPACING);
             layout.pack_start(face_widgets_layout, false);
-            layout.pack_start(help_text, false);
+            layout.pack_start(help_layout, false);
             layout.pack_start(new Gtk.HSeparator(), false);
             layout.pack_start(response_layout, false);
 
@@ -1925,6 +1940,10 @@ public class FacesTool : EditingTool {
         }
 
         public void set_editing_phase(EditingPhase phase, FaceShape? face_shape = null) {
+            if (editing_phase == EditingPhase.DETECTING_FACES &&
+                phase != EditingPhase.DETECTING_FACES_FINISHED)
+                return;
+            
             switch (phase) {
                 case EditingPhase.CLICK_TO_EDIT:
                     assert(face_shape != null);
@@ -1949,10 +1968,30 @@ public class FacesTool : EditingTool {
                     help_text.set_text(_("Move or modify the face shape or name and press Enter"));
 
                     break;
+                case EditingPhase.DETECTING_FACES:
+                    help_text.set_text(_("Detecting faces..."));
+                    
+                    if (cancel_detection_button.get_parent() == null)
+                        help_layout.pack_start(cancel_detection_button, false);
+                    
+                    detection_button.set_sensitive(false);
+                    cancel_detection_button.set_sensitive(true);
+                    cancel_detection_button.show();
+                    
+                    break;
+                case EditingPhase.DETECTING_FACES_FINISHED:
+                    help_text.set_text(_("If you don't set the name of unknown faces they won't be saved."));
+                    
+                    break;
                 default:
                     assert_not_reached();
             }
-
+            
+            if (editing_phase == EditingPhase.DETECTING_FACES && editing_phase != phase) {
+                cancel_detection_button.hide();
+                detection_button.set_sensitive(true);
+            }
+            
             editing_phase = phase;
         }
 
@@ -2014,6 +2053,10 @@ public class FacesTool : EditingTool {
         private void on_face_hidden() {
             face_hidden();
         }
+        
+        private void on_cancel_detection() {
+            detection_canceled();
+        }
     }
 
     public class EditingFaceToolWindow : EditingToolWindow {
@@ -2038,10 +2081,146 @@ public class FacesTool : EditingTool {
             return key_pressed(event) || base.key_press_event(event);
         }
     }
+    
+    private class FaceDetectionJob : BackgroundJob {
+        protected const string DETECTION_COMMAND =
+            "%s/facedetect --cascade=\"%s/haarcascade_frontalface_alt.xml\" --scale=\"1.2\" \"%s\"";
+        
+        private Gee.Queue<string> faces = null;
+        private string image_path;
+        private string output;
+        
+        public FaceDetectionJob(FacesToolWindow owner, string image_path,
+            CompletionCallback completion_callback, Cancellable cancellable,
+            CancellationCallback cancellation_callback) {
+            base(owner, completion_callback, cancellable, cancellation_callback);
+            
+            this.image_path = image_path;
+        }
+        
+//~         ~FaceDetectionJob() {
+//~         }
+        
+        public override void execute() {
+            try {
+                string home_path = AppDirs.get_home_dir().get_path();
+                
+                string[] argv = {
+                    home_path + "/facedetect",
+                    "--cascade=" + home_path + "/haarcascade_frontalface_alt.xml",
+                    "--scale=1.2",
+                    image_path
+                };
+                Process.spawn_sync(null, argv, null, SpawnFlags.STDERR_TO_DEV_NULL, null, out output);
+                
+            } catch (SpawnError e) {
+                stderr.printf("Error trying to spawn face detection program: %s\n", e.message);
+                assert_not_reached();
+            }
+            
+            faces = new Gee.PriorityQueue<string>();
+            string[] lines = output.split("\n");
+			foreach (string line in lines) {
+				if (line.length == 0)
+					continue;
+				
+				string[] type_and_serialized = line.split(";");
+				if (type_and_serialized.length != 2) {
+                    stderr.printf("Wrong serialized line in face detection program output.");
+                    assert_not_reached();
+                }
+				
+				switch (type_and_serialized[0]) {
+					case "face":
+                        StringBuilder serialized_geometry = new StringBuilder();
+                        serialized_geometry.append(FaceRectangle.SHAPE_TYPE);
+                        serialized_geometry.append(";");
+                        serialized_geometry.append(parse_serialized_geometry(type_and_serialized[1]));
 
+                        faces.add(serialized_geometry.str);
+						break;
+					
+					case "warning":
+						stderr.printf("%s\n", type_and_serialized[1]);
+						break;
+					
+					case "error":
+						stderr.printf("%s\n", type_and_serialized[1]);
+						assert_not_reached();
+					
+					default:
+						assert_not_reached();
+				}
+			}
+        }
+        
+        private string parse_serialized_geometry(string serialized_geometry) {
+            string[] serialized_geometry_pieces = serialized_geometry.split("&");
+            if (serialized_geometry_pieces.length != 4) {
+                stderr.printf("Wrong serialized line in face detection program output.");
+                assert_not_reached();
+            }
+            
+            double x = 0;
+            double y = 0;
+            double width = 0;
+            double height = 0;
+            foreach (string piece in serialized_geometry_pieces) {
+                
+                string[] name_and_value = piece.split("=");
+                if (name_and_value.length != 2) {
+                    stderr.printf("Wrong serialized line in face detection program output.");
+                    assert_not_reached();
+                }
+                
+                switch (name_and_value[0]) {
+                    case "x":
+                        x = name_and_value[1].to_double();
+                        break;
+                    
+                    case "y":
+                        y = name_and_value[1].to_double();
+                        break;
+                    
+                    case "width":
+                        width = name_and_value[1].to_double();
+                        break;
+                    
+                    case "height":
+                        height = name_and_value[1].to_double();
+                        break;
+                    
+                    default:
+                        stderr.printf("Wrong serialized line in face detection program output.");
+                        assert_not_reached();
+                }
+            }
+            
+            double half_width = width / 2;
+            double half_height = height / 2;
+            
+            return "%s;%s;%s;%s".printf((x + half_width).to_string(), (y + half_height).to_string(),
+                half_width.to_string(), half_height.to_string());
+        }
+        
+        public string? get_next() {
+            if (faces == null)
+                return null;
+            
+            return faces.poll();
+        }
+        
+        public void reset() {
+            faces = null;
+        }
+    }
+    
     private Cairo.Surface image_surface = null;
     private Gee.HashMap<string, FaceShape> face_shapes;
     private Gee.HashMap<string, string> original_face_locations;
+    private Cancellable face_detection_cancellable;
+    private FaceDetectionJob face_detection;
+    private Workers workers;
     private FaceShape editing_face_shape = null;
     private FacesToolWindow faces_tool_window = null;
 
@@ -2090,9 +2269,15 @@ public class FacesTool : EditingTool {
                 add_face(new_face_shape);
                 original_face_locations.set(face_name, serialized_geometry);
             }
-
+        
         set_ok_button_sensitivity();
-
+        
+        face_detection_cancellable = new Cancellable();
+        workers = new Workers(1, false);
+        face_detection = new FaceDetectionJob(faces_tool_window,
+            canvas.get_photo().get_file().get_path(), on_faces_detected,
+            face_detection_cancellable, on_detection_cancelled);
+        
         bind_window_handlers();
 
         base.activate(canvas);
@@ -2126,18 +2311,22 @@ public class FacesTool : EditingTool {
         faces_tool_window.key_press_event.connect(on_keypress);
         faces_tool_window.ok_button.clicked.connect(on_faces_ok);
         faces_tool_window.cancel_button.clicked.connect(notify_cancel);
+        faces_tool_window.detection_button.clicked.connect(detect_faces);
         faces_tool_window.face_hidden.connect(on_face_hidden);
         faces_tool_window.face_edit_requested.connect(edit_face);
         faces_tool_window.face_delete_requested.connect(delete_face);
+        faces_tool_window.detection_canceled.connect(cancel_face_detection);
     }
 
     private void unbind_window_handlers() {
         faces_tool_window.key_press_event.disconnect(on_keypress);
         faces_tool_window.ok_button.clicked.disconnect(on_faces_ok);
         faces_tool_window.cancel_button.clicked.disconnect(notify_cancel);
+        faces_tool_window.detection_button.clicked.disconnect(detect_faces);
         faces_tool_window.face_hidden.disconnect(on_face_hidden);
         faces_tool_window.face_edit_requested.disconnect(edit_face);
         faces_tool_window.face_delete_requested.disconnect(delete_face);
+        faces_tool_window.detection_canceled.disconnect(cancel_face_detection);
     }
 
     private void prepare_ctx(Cairo.Context ctx, Dimensions dim) {
@@ -2172,7 +2361,7 @@ public class FacesTool : EditingTool {
 
         return base.on_keypress(event);
     }
-
+    
     public override void on_left_click(int x, int y) {
         if (editing_face_shape != null && editing_face_shape.on_left_click(x, y))
             return;
@@ -2188,7 +2377,7 @@ public class FacesTool : EditingTool {
 
         new_face_shape(x, y);
     }
-
+    
     public override void on_left_released(int x, int y) {
         if (editing_face_shape != null) {
             editing_face_shape.on_left_released(x, y);
@@ -2297,11 +2486,11 @@ public class FacesTool : EditingTool {
         if (editing_face_shape != null)
             editing_face_shape.show();
     }
-
+    
     private void new_face_shape(int x, int y) {
         edit_face_shape(new FaceRectangle(canvas, x, y), true);
     }
-
+    
     private void edit_face_shape(FaceShape face_shape, bool creating = false) {
         hide_visible_face();
 
@@ -2332,7 +2521,7 @@ public class FacesTool : EditingTool {
         editing_face_shape.add_me_requested.connect(add_face);
         editing_face_shape.delete_me_requested.connect(release_face_shape);
     }
-
+    
     private void release_face_shape() {
         if (editing_face_shape == null)
             return;
@@ -2369,6 +2558,9 @@ public class FacesTool : EditingTool {
 
         Gee.Map<Face, string> new_faces = new Gee.HashMap<Face, string>();
         foreach (FaceShape face_shape in face_shapes.values) {
+            if (!face_shape.get_known())
+                continue;
+            
             Face new_face = Face.for_name(face_shape.get_name());
 
             new_faces.set(new_face, face_shape.serialize());
@@ -2398,6 +2590,7 @@ public class FacesTool : EditingTool {
                         face_shapes.unset(entry.key);
                         face_shapes.set(prepared_face_name, face_shape);
 
+                        face_shape.set_known(true);
                         face_shape.get_widget().label.set_text(face_shape.get_name());
 
                         break;
@@ -2412,7 +2605,6 @@ public class FacesTool : EditingTool {
             face_shape.set_editable(false);
 
             set_ok_button_sensitivity();
-
             release_face_shape();
         }
     }
@@ -2445,16 +2637,23 @@ public class FacesTool : EditingTool {
     }
     
     private void set_ok_button_sensitivity() {
-        if (original_face_locations.size != face_shapes.size) {
+        Gee.Map<string, FaceShape> known_face_shapes = new Gee.HashMap<string, FaceShape>();
+        foreach (Gee.Map.Entry<string, FaceShape> face_shape in face_shapes.entries) {
+            if (face_shape.value.get_known()) {
+                known_face_shapes.set(face_shape.key, face_shape.value);
+            }
+        }
+        
+        if (original_face_locations.size != known_face_shapes.size) {
             faces_tool_window.ok_button_set_sensitive(true);
             
             return;
         }
         
-        foreach (Gee.Map.Entry<string, string> face_location in original_face_locations.entries) {
+        foreach (Gee.Map.Entry<string, FaceShape> face_shape in known_face_shapes.entries) {
             bool found = false;
             
-            foreach (Gee.Map.Entry<string, FaceShape> face_shape in face_shapes.entries) {
+            foreach (Gee.Map.Entry<string, string> face_location in original_face_locations.entries) {
                 if (face_location.key == face_shape.key) {
                     if (face_location.value == face_shape.value.serialize()) {
                         found = true;
@@ -2476,6 +2675,72 @@ public class FacesTool : EditingTool {
         }
         
         faces_tool_window.ok_button_set_sensitive(false);
+    }
+    
+    private void detect_faces() {
+        faces_tool_window.detection_button.set_sensitive(false);
+        faces_tool_window.set_editing_phase(EditingPhase.DETECTING_FACES);
+        
+        workers.enqueue(face_detection);
+    }
+    
+    private void pick_faces_from_autodetected() {
+        int c = 0;
+        while (true) {
+            string? serialized_geometry = face_detection.get_next();
+            if (serialized_geometry == null) {
+                faces_tool_window.set_editing_phase(EditingPhase.DETECTING_FACES_FINISHED);
+                
+                return;
+            }
+            
+            FaceShape face_shape;
+            try {
+                face_shape = FaceShape.from_serialized(canvas, serialized_geometry);
+            } catch (FaceShapeError e) {
+                if (e is FaceShapeError.CANT_CREATE)
+                    continue;
+
+                assert_not_reached();
+            }
+            
+            bool found = false;
+            foreach (FaceShape existing_face_shape in face_shapes.values) {
+                if (existing_face_shape.equals(face_shape)) {
+                    found = true;
+                    
+                    break;
+                }
+            }
+            
+            if (found)
+                continue;
+            
+            c++;
+            
+            face_shape.set_name("Unknown face #%d".printf(c));
+            face_shape.set_known(false);
+            add_face(face_shape);
+        }
+    }
+    
+    private void on_faces_detected() {
+        face_detection_cancellable.reset();
+        
+        pick_faces_from_autodetected();
+    }
+    
+    private void on_detection_cancelled(BackgroundJob job) {
+        ((FaceDetectionJob) job).reset();
+        face_detection_cancellable.reset();
+        
+        faces_tool_window.set_editing_phase(EditingPhase.DETECTING_FACES_FINISHED);
+    }
+    
+    private void cancel_face_detection() {
+        faces_tool_window.cancel_detection_button.set_sensitive(false);
+        
+        face_detection.cancel();
     }
 }
 

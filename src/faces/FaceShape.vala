@@ -7,7 +7,8 @@
  #if ENABLE_FACES
 
 public abstract class FaceShape : Object {
-    protected static const string SHAPE_TYPE = null;
+    public static const string SHAPE_TYPE = null;
+    
     protected static const int FACE_WINDOW_MARGIN = 5;
     protected static const int LABEL_MARGIN = 12;
     protected static const int LABEL_PADDING = 9;
@@ -22,6 +23,7 @@ public abstract class FaceShape : Object {
     
     private bool editable = true;
     private bool visible = true;
+    private bool known = true;
     
     private weak EditingTools.FacesTool.FaceWidget face_widget = null;
     
@@ -81,6 +83,14 @@ public abstract class FaceShape : Object {
         return face_name == "" ? null : face_name;
     }
     
+    public void set_known(bool known) {
+        this.known = known;
+    }
+    
+    public bool get_known() {
+        return known;
+    }
+    
     public void set_widget(EditingTools.FacesTool.FaceWidget face_widget) {
         this.face_widget = face_widget;
     }
@@ -110,6 +120,9 @@ public abstract class FaceShape : Object {
             update_face_window_position();
             face_window.show();
             face_window.present();
+            
+            if (!known)
+                face_window.entry.select_region(0, -1);
         }
     }
     
@@ -157,6 +170,7 @@ public abstract class FaceShape : Object {
     public abstract void on_left_released(int x, int y);
     public abstract bool on_left_click(int x, int y);
     public abstract bool cursor_is_over(int x, int y);
+    public abstract bool equals(FaceShape face_shape);
     public abstract double get_distance(int x, int y);
     
     protected abstract void paint();
@@ -164,7 +178,7 @@ public abstract class FaceShape : Object {
 }
 
 public class FaceRectangle : FaceShape {
-    protected new static const string SHAPE_TYPE = "Rectangle";
+    public new static const string SHAPE_TYPE = "Rectangle";
     
     private const int FACE_MIN_SIZE = 8;
     private const int NULL_SIZE = 0;
@@ -412,6 +426,10 @@ public class FaceRectangle : FaceShape {
         
         half_width = (width_right_end - width_left_end) / 2;
         half_height = (height_bottom_end - height_top_end) / 2;
+    }
+    
+    public override bool equals(FaceShape face_shape) {
+        return serialize() == face_shape.serialize();
     }
     
     public override void prepare_ctx(Cairo.Context ctx, Dimensions dim) {
