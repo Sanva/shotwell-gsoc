@@ -2083,9 +2083,6 @@ public class FacesTool : EditingTool {
     }
     
     private class FaceDetectionJob : BackgroundJob {
-        protected const string DETECTION_COMMAND =
-            "%s/facedetect --cascade=\"%s/haarcascade_frontalface_alt.xml\" --scale=\"1.2\" \"%s\"";
-        
         private Gee.Queue<string> faces = null;
         private string image_path;
         private string output;
@@ -2098,16 +2095,11 @@ public class FacesTool : EditingTool {
             this.image_path = image_path;
         }
         
-//~         ~FaceDetectionJob() {
-//~         }
-        
         public override void execute() {
             try {
-                string home_path = AppDirs.get_home_dir().get_path();
-                
                 string[] argv = {
-                    home_path + "/facedetect",
-                    "--cascade=" + home_path + "/haarcascade_frontalface_alt.xml",
+                    AppDirs.get_facedetect_bin().get_path(),
+                    "--cascade=" + AppDirs.get_haarcascade_file().get_path(),
                     "--scale=1.2",
                     image_path
                 };
