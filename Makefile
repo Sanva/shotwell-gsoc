@@ -580,6 +580,7 @@ install:
 	$(INSTALL_PROGRAM) $(THUMBNAILER_BIN) $(DESTDIR)$(PREFIX)/bin
 	mkdir -p $(DESTDIR)$(PREFIX)/libexec/shotwell
 	$(INSTALL_PROGRAM) $(MIGRATOR_BIN) $(DESTDIR)$(PREFIX)/libexec/shotwell
+	$(if $(ENABLE_FACES), mkdir -p $(DESTDIR)$(PREFIX)/share/shotwell/$(FACEDETECT_DIR))
 	$(if $(ENABLE_FACES), $(INSTALL_PROGRAM) $(FACEDETECT_BIN) $(DESTDIR)$(PREFIX)/bin)
 	$(if $(ENABLE_FACES), $(INSTALL_DATA) $(FACEDETECT_DIR)/facedetect-haarcascade.xml $(DESTDIR)$(PREFIX)/share/shotwell/$(FACEDETECT_DIR)/facedetect-haarcascade.xml)
 	mkdir -p $(DESTDIR)$(PREFIX)/share/shotwell/icons
